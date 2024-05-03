@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import os
+import pickle
 
 def compute_cost(X, y, theta):
     m = len(y)
@@ -89,32 +90,6 @@ def mini_batch_gradient_descent(X, y,theta,accurate = 0.0001, learning_rate=0.5,
     return theta
 
 
-
-# np.random.seed(42)
-# X = np.random.rand(100, 2)
-# y = 1+ 5 * X[:, 0] + 2 * X[:, 1] 
-
-# X_b = np.c_[np.ones((100, 1)), X]
-
-# theta = mini_batch_gradient_descent(X_b, y)
-# print()
-# theta_ = gradient_descent(X_b, y)
-# print()
-# theta__ = stochastic_gradient_descent(X_b, y)
-
-
-# test_data_X = np.random.rand(100, 2)
-# predicted_data_y = theta[0]+ theta[1]*test_data_X[:, 0] + theta[2]*test_data_X[:, 1]
-
-# fig = plt.figure()
-# ax = fig.add_subplot(111, projection='3d') #set up 3d plot
-
-# ax.scatter(X[:, 0], X[:, 1], y, c='red', label='random data')
-# ax.scatter(test_data_X[:,0], test_data_X[:,1], predicted_data_y, c = 'blue', label='predicted data')
-
-# ax.legend() 
-# plt.show()
-
 def create_randomint_array(n,min,max, randomseed = 1):
     np.random.seed(randomseed)
     return np.array([[np.random.randint(min, max)] for _ in range(n)])
@@ -150,13 +125,17 @@ def accuracy_score(y_true, y_pred):
     total_predictions = len(y_true)
     
     accuracy = correct_predictions / total_predictions
-    return accuracy
+    print(f"Accuracy: {accuracy * 100:.2f}%")
 
 class LogisticRegresstion():
     def __init__(self,X,y):
         self.theta = np.zeros(X.shape[1]) 
         self.X = np.array(X)
         self.y = np.array(y)
+    def __init__(self):
+        self.theta = None
+        self.X = None
+        self.y = None
     def Sigmoid(self,z):
         s = 1 / (1 + np.exp(-z))
         return s
@@ -203,26 +182,59 @@ class LogisticRegresstion():
         self.theta = np.load(file_path)
 
 
+class OneVsRestLogisticRegression():
+    def __init__(self, classes):
+        self.classes = classes
+        self.classifiers = {}
+    
+    def fit(self, X, y, accurate = 0.0001,learning_rate=0.5, iterations=1000):
+        for cls in self.classes:
+            y_binary = (y == cls).astype(int)
+            classifier = LogisticRegresstion(X, y_binary)
+            print(f"{cls}.")
+            classifier.Sigmoid_GD_fit(accurate,learning_rate,iterations)
+            self.classifiers[cls] = classifier
+    
+    def predict_proba(self, X):
+        probabilities = {}
+        for cls, classifier in self.classifiers.items():
+            probabilities[cls] = classifier.Predict_Probability(X)
+        return probabilities
+    
+    def predict(self, X):
+        probabilities = self.predict_proba(X)
+        predictions = np.argmax(np.array(list(probabilities.values())), axis=0)
+        return [list(self.classes)[p] for p in predictions]
+    
+    def save_thetas(self, directory_path):
+        for cls, classifier in self.classifiers.items():
+            classifier.Save_Theta(directory_path, f"{cls}_theta.npy")
+    
+    def load_thetas(self, directory_path):
+        try:
+            for cls in self.classes:
+                classifier = LogisticRegresstion() 
+                classifier.Load_Theta(directory_path, f"{cls}_theta.npy")
+                self.classifiers[cls] = classifier
+            return True
+        except Exception as e:
+            print(f"Load model failed: {e}")
+            return False
+
+
 def load_ubyte(filename):
     with open(filename, 'rb') as f:
-        # Read magic number
         magic_number = int.from_bytes(f.read(4), 'big')
 
-        if magic_number == 2051:  # idx3 (image data) format
-            # Read number of items, rows, and columns
+        if magic_number == 2051: 
             num_items = int.from_bytes(f.read(4), 'big')
             num_rows = int.from_bytes(f.read(4), 'big')
             num_cols = int.from_bytes(f.read(4), 'big')
-
-            # Read the rest of the file as unsigned bytes
             data = np.fromfile(f, dtype=np.uint8)
             data = data.reshape(num_items, num_rows, num_cols)
 
-        elif magic_number == 2049:  # idx1 (label data) format
-            # Read number of items
+        elif magic_number == 2049: 
             num_items = int.from_bytes(f.read(4), 'big')
-
-            # Read the rest of the file as unsigned bytes
             data = np.fromfile(f, dtype=np.uint8)
 
         else:

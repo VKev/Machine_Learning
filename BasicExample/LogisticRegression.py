@@ -1,3 +1,5 @@
+import sys
+sys.path.append('../MachineLearning')
 import FuncAll as fa
 import numpy as np 
 import matplotlib.pyplot as plt

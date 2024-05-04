@@ -2,8 +2,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import os
-import pickle
-
 def compute_cost(X, y, theta):
     m = len(y)
     predictions = X.dot(theta)
@@ -24,7 +22,7 @@ def gradient_descent(X, y, theta, accurate=0.0001, learning_rate=0.5, iterations
         if np.linalg.norm(gradients) < accurate:
             break
 
-    final_cost = compute_cost(X, y, theta)  # Assuming you have a compute_cost function
+    final_cost = compute_cost(X, y, theta) 
     print('GD iterations: ', _+1)
     print('GD data calculated per iteration: ', m)
     print('GD cost: ', final_cost)
@@ -128,20 +126,21 @@ def accuracy_score(y_true, y_pred):
     print(f"Accuracy: {accuracy * 100:.2f}%")
 
 class LogisticRegresstion():
-    def __init__(self,X,y):
-        self.theta = np.zeros(X.shape[1]) 
-        self.X = np.array(X)
-        self.y = np.array(y)
-    def __init__(self):
-        self.theta = None
-        self.X = None
-        self.y = None
+    def __init__(self, X=None, y=None):
+        if X is not None and y is not None:
+            self.theta = np.zeros(X.shape[1]) 
+            self.X = np.array(X)
+            self.y = np.array(y)
+        else:
+            self.theta = None
+            self.X = None
+            self.y = None
     def Sigmoid(self,z):
         s = 1 / (1 + np.exp(-z))
         return s
-    def compute_log_loss(self,X, y, theta):
+    def compute_log_loss(self):
         m = len(self.y)
-        z = np.dot(self.X, theta)
+        z = np.dot(self.X, self.theta)
         h = self.Sigmoid(z)
         loss = -np.mean(self.y * np.log(h) + (1 - self.y) * np.log(1 - h))
         return loss
@@ -160,7 +159,7 @@ class LogisticRegresstion():
             if(abs(sum(gradients))/m < accurate):
                 break
 
-        final_cost = self.compute_log_loss(self.X, self.y, self.theta)
+        final_cost = self.compute_log_loss()
         print('Sigmoid_GD iterations: ', _+1)
         print('Sigmoid_GD data calculated per iteration: ', m)
         print('Sigmoid_GD cost: ', final_cost)
@@ -187,7 +186,7 @@ class OneVsRestLogisticRegression():
         self.classes = classes
         self.classifiers = {}
     
-    def fit(self, X, y, accurate = 0.0001,learning_rate=0.5, iterations=1000):
+    def GD_fit(self, X, y, accurate = 0.0001,learning_rate=0.5, iterations=1000):
         for cls in self.classes:
             y_binary = (y == cls).astype(int)
             classifier = LogisticRegresstion(X, y_binary)
@@ -202,6 +201,9 @@ class OneVsRestLogisticRegression():
         return probabilities
     
     def predict(self, X):
+        if len(X.shape) == 1:
+            X = X.reshape(1, -1)
+            
         probabilities = self.predict_proba(X)
         predictions = np.argmax(np.array(list(probabilities.values())), axis=0)
         return [list(self.classes)[p] for p in predictions]
@@ -220,6 +222,122 @@ class OneVsRestLogisticRegression():
         except Exception as e:
             print(f"Load model failed: {e}")
             return False
+
+class SoftmaxRegression:
+    def __init__(self, num_classes) :
+        self.theta = None
+        self.num_classes = num_classes
+    def softmax(self,X):
+        if X.ndim == 1:
+            X = X.reshape(1, -1) 
+        exp_scores = np.exp(X - np.max(X, axis=1, keepdims=True))
+        return exp_scores / np.sum(exp_scores, axis=1, keepdims=True)
+    def one_hot_encode(self,y):
+        m = len(y)
+        one_hot = np.zeros((m, self.num_classes))
+        one_hot[np.arange(m), y] = 1
+        return one_hot
+    def compute_cross_entropy_loss(self, y_true, y_pred):
+        m = len(y_true)
+        return -np.sum(y_true * np.log(y_pred)) / m
+    def MBGD_fit(self, X, y, accurate=0.0001, num_iterations=1000, learning_rate=0.5, batch_size=32):
+        m, n = X.shape
+        W = np.zeros((n, self.num_classes))
+        b = np.zeros(self.num_classes)
+        
+        y_one_hot = self.one_hot_encode(y)
+        prev_loss = float('inf')
+        
+        for i in range(num_iterations):
+            shuffled_indices = np.random.permutation(m)
+            X_shuffled = X[shuffled_indices]
+            y_shuffled = y[shuffled_indices]
+            
+            for batch_start in range(0, m, batch_size):
+                X_batch = X_shuffled[batch_start:batch_start+batch_size]
+                y_batch = y_shuffled[batch_start:batch_start+batch_size]
+                
+                scores = np.dot(X_batch, W) + b
+                probs = self.softmax(scores)
+                
+                gradient_W = np.dot(X_batch.T, probs - self.one_hot_encode(y_batch)) / len(X_batch)
+                gradient_b = np.mean(probs - self.one_hot_encode(y_batch), axis=0)
+                
+                W -= learning_rate * gradient_W
+                b -= learning_rate * gradient_b
+            
+            current_probs = self.softmax(np.dot(X, W) + b)
+            loss = self.compute_cross_entropy_loss(y_one_hot, current_probs)
+            
+            if abs(prev_loss - loss) < accurate:
+                break
+            
+            prev_loss = loss
+            
+        self.theta = np.concatenate((W.reshape(-1), b))
+        final_loss = self.compute_cross_entropy_loss(y_one_hot, self.predict_proba(X))
+        print('Softmax_MBGD iterations:', i + 1)
+        print('Softmax_MBGD data calculated per iteration:', batch_size)
+        print('Softmax_MBGD cost:', final_loss)
+    def GD_fit(self,X, y, accurate=0.0001,num_iterations=1000, learning_rate=0.5):
+        m, n = X.shape
+        W = np.zeros((n, self.num_classes))
+        b = np.zeros(self.num_classes)
+        
+        y_one_hot = self.one_hot_encode(y)
+        prev_loss = float('inf') 
+        for i in range(num_iterations):
+            scores = np.dot(X, W) + b
+            probs = self.softmax(scores)
+
+            gradient_W = np.dot(X.T, probs - y_one_hot) / m
+            gradient_b = np.mean(probs - y_one_hot, axis=0)
+
+            W -= learning_rate * gradient_W
+            b -= learning_rate * gradient_b
+
+            loss = -np.sum(y_one_hot * np.log(probs)) / m
+
+            if abs(prev_loss - loss) < accurate:
+                break
+            
+            prev_loss = loss
+            
+        self.theta = np.concatenate((W.reshape(-1), b))
+        final_loss = self.compute_cross_entropy_loss(y_one_hot, self.predict_proba(X))
+        print('Softmax_GD iterations:', i + 1)
+        print('Softmax_GD data calculated per iteration:', m)
+        print('Softmax_GD cost:', final_loss)
+    def predict_proba(self, X):
+        if self.theta is None:
+            raise ValueError("Model not trained. Please fit the model first.")
+        
+        w = self.theta[:-self.num_classes].reshape(-1, self.num_classes)
+        b= self.theta[-self.num_classes:]
+        scores = np.dot(X, w) +  b
+        probs = self.softmax(scores)
+        return probs
+    def predict_classes(self,X):
+        probs = self.predict_proba(X)
+        classes = np.argmax(probs, axis=1)
+        return classes
+    def save_theta(self, directory, filename):
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+        
+        filepath = os.path.join(directory, filename)
+        np.save(filepath, self.theta)
+    
+    def load_theta(self, directory, filename):
+        filepath = os.path.join(directory, filename)
+        if os.path.exists(filepath):
+            self.theta = np.load(filepath)
+            return True
+        else:
+            print("File not found")
+            return False
+
+    
 
 
 def load_ubyte(filename):

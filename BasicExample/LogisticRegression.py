@@ -13,7 +13,7 @@ y = np.array([0 if x < 50 else 1 for x in X])
 
 
 lr = fa.LogisticRegresstion(X_one,y)
-lr.Sigmoid_GD_fit(learning_rate=0.05,iterations=4000)
+lr.Sigmoid_GD_fit(learning_rate=0.01,iterations=4000)
 
 
 sigmoidValues = lr.Predict_Probability(X_one)

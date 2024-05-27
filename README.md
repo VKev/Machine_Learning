@@ -3,4 +3,4 @@
 ## Implement for handwriting recognition
 
 - one-vs-rest (OvR)
-- softmax
+- softmax regression

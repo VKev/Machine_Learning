@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import os
 
 # Load and prepare the data
 data = pd.read_csv("NeuronNetwork_FromScratch/Dataset/train.csv")
@@ -46,7 +47,19 @@ class dense_ReLU:
         self.dz = dz * self.derivative_ReLU(self.z)
         self.dw = (1 / m) * np.dot(self.dz, input_params.T)
         self.db = (1 / m) * np.sum(self.dz, axis=1, keepdims=True)
+    
+    def save_weights(self, folder_path):
+        os.makedirs(folder_path, exist_ok=True)  # Create directory if not exists
+        np.save(os.path.join(folder_path, "weights.npy"), self.w)
+        np.save(os.path.join(folder_path, "biases.npy"), self.b)
 
+    def load_weights(self, folder_path):
+        if os.path.exists(folder_path):
+            self.w = np.load(os.path.join(folder_path, "weights.npy"))
+            self.b = np.load(os.path.join(folder_path, "biases.npy"))
+            return True
+        else :
+            return False
 # Output layer with Softmax activation
 class output_Softmax:
     def __init__(self, neuron, params):
@@ -85,6 +98,19 @@ class output_Softmax:
         self.forward_prop(input_params)
         predicted_labels = np.argmax(self.a, axis=0)
         return predicted_labels
+    
+    def save_weights(self, folder_path):
+        os.makedirs(folder_path, exist_ok=True)  # Create directory if not exists
+        np.save(os.path.join(folder_path, "weights.npy"), self.w)
+        np.save(os.path.join(folder_path, "biases.npy"), self.b)
+
+    def load_weights(self, folder_path):
+        if os.path.exists(folder_path):
+            self.w = np.load(os.path.join(folder_path, "weights.npy"))
+            self.b = np.load(os.path.join(folder_path, "biases.npy"))
+            return True
+        else :
+            return False
 
 # Gradient descent function
 def gradient_descent(layerlist, x_train, y_train, learning_rate, num_epochs):
@@ -116,22 +142,37 @@ def gradient_descent(layerlist, x_train, y_train, learning_rate, num_epochs):
             accuracy = np.mean(predictions == y_train)
             print(f'Epoch {epoch}: Training accuracy: {accuracy * 100:.2f}%')
 
-# Initialize layers
+    for layer_index, layer in enumerate(layerlist):
+        layer.save_weights(f"NeuronNetwork_FromScratch/SaveThetas/layer{layer_index}")        
+
+def load_weights(layerlist, folder_path):
+    try:
+        for layer_index, layer in enumerate(layerlist):
+            loadsuccess = layer.load_weights(os.path.join(folder_path, f"layer{layer_index}"))
+            if loadsuccess == False:
+                return False
+        return True
+    except:
+        return False
+
+
 hiddenLayer1 = dense_ReLU(neuron=128, params=n)
 hiddenLayer2 = dense_ReLU(neuron=64, params=128)
 outputLayer = output_Softmax(neuron=10, params=64)  # Update the number of neurons here
 
-# User-defined layers
 layerlist = [hiddenLayer1, hiddenLayer2, outputLayer]
 
+loaded_layerlist = [dense_ReLU(neuron=128, params=n), dense_ReLU(neuron=64, params=128), output_Softmax(neuron=10, params=64)]
+loadsuccess = load_weights(loaded_layerlist, "NeuronNetwork_FromScratch/SaveThetas")
 
-# Training parameters
-learning_rate = 0.5
-num_epochs = 100
-
-# Train the network
-gradient_descent(layerlist, x_train, y_train, learning_rate, num_epochs)
-
+# If weights are successfully loaded, use the loaded weights, else train the network
+if loadsuccess:
+    layerlist = loaded_layerlist
+else:
+    # Train the network
+    learning_rate = 0.5
+    num_epochs = 100
+    gradient_descent(layerlist, x_train, y_train, learning_rate, num_epochs)
 # Evaluate on the test set
 input_params = x_test
 for layer in layerlist:
